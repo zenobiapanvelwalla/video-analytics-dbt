@@ -1,0 +1,4 @@
+# Local development + CI (DuckDB, no cloud account needed)
+dbt-core~=1.12.0
+dbt-duckdb~=1.11.0
+dbt-metricflow[dbt-duckdb]~=0.15.0

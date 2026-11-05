@@ -1,0 +1,4 @@
+# Additional packages for running against Snowflake
+-r requirements.txt
+dbt-snowflake>=1.9,<2
+snowflake-connector-python>=3.12
