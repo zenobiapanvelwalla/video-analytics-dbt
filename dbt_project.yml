@@ -20,6 +20,9 @@ models:
     marts:
       +schema: marts
       +materialized: table
+    utilities:
+      +schema: marts
+      +materialized: table
 
 vars:
   # Days to re-process on each incremental run, to catch late-arriving events.

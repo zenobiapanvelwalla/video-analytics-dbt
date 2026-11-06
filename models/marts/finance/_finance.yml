@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: fct_daily_customer_usage
+    description: >
+      One row per customer per day with at least one view. Delivered minutes
+      drive usage-based billing. plan_name is the plan in effect at the end of
+      that day (point-in-time join to dim_customer_plan_history).
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ["customer_id", "usage_date"]
+    columns:
+      - name: customer_usage_day_key
+        data_tests: [unique, not_null]
+      - name: plan_name
+        description: Null here would mean a usage day with no matching plan period.
+        data_tests: [not_null]
+      - name: delivered_minutes
+        description: Total watch time in minutes. The billable usage unit.
+        data_tests: [is_non_negative]
+
+  - name: fct_monthly_billing
+    description: >
+      One row per customer per calendar month: plan, delivered minutes, base fee,
+      overage, total billed. Includes zero-usage months. Filter on
+      is_complete_month for financial reporting.
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ["customer_id", "billing_month"]
+    columns:
+      - name: customer_month_key
+        data_tests: [unique, not_null]
+      - name: plan_name
+        data_tests: [not_null]
+      - name: overage_minutes
+        data_tests: [is_non_negative]
+      - name: overage_fee_usd
+        data_tests: [is_non_negative]
+      - name: is_complete_month
+        description: True when the month has closed and is fully covered by the usage data.
