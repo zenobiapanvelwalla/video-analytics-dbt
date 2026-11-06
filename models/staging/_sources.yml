@@ -1,38 +1,53 @@
 version: 2
 
+# Raw data lands as all-VARCHAR tables (as from Fivetran / Airbyte).
+# Snowflake: RAW.PLATFORM / RAW.PLAYER     DuckDB: raw_platform / raw_player
+
 sources:
   - name: platform
     description: Replicated tables from the production application database.
-    schema: raw_platform
+    database: "{{ 'raw' if target.type == 'snowflake' else target.database }}"
+    schema: "{{ 'platform' if target.type == 'snowflake' else 'raw_platform' }}"
     config:
       loaded_at_field: "cast(_loaded_at as timestamp)"
       freshness:
-        warn_after: {count: 12, period: hour}
-        error_after: {count: 24, period: hour}
+        warn_after: { count: 12, period: hour }
+        error_after: { count: 24, period: hour }
     tables:
       - name: customers
         description: One row per customer account.
         columns:
           - name: customer_id
             data_tests: [unique, not_null]
-          - name: plan_changes
-            description: Append only log of plan changes. First row per customer is their signup plan.
-            config: 
-              freshness: null # change log, not continuously loaded
-          - name: video_assets
-            description: One row per uploaded video.
-  
+      - name: plan_changes
+        description: >
+          Append-only log of subscription plan changes. The first row per customer
+          is their initial plan at signup.
+        config:
+          freshness: null   # change log, not continuously loaded
+        columns:
+          - name: plan_change_id
+            data_tests: [unique, not_null]
+      - name: video_assets
+        description: One row per uploaded video asset.
+        columns:
+          - name: asset_id
+            data_tests: [unique, not_null]
+
   - name: player
-    description: Playback sessions from the player SDK. At-least-once delivery, so expect duplicates.
-    schema: raw_player
+    description: >
+      Playback sessions emitted by the player SDK and delivered through an
+      at-least-once event pipeline. Expect duplicates and late arrivals.
+    database: "{{ 'raw' if target.type == 'snowflake' else target.database }}"
+    schema: "{{ 'player' if target.type == 'snowflake' else 'raw_player' }}"
     config:
       loaded_at_field: "cast(_loaded_at as timestamp)"
       freshness:
-        warn_after: {count: 1, period: hour}
-        error_after: {count: 6, period: hour}
+        warn_after: { count: 1, period: hour }
+        error_after: { count: 6, period: hour }
     tables:
       - name: video_views
+        description: One row per playback session (may contain duplicates by view_id).
         columns:
           - name: view_id
-            data_tests: [not_null] # NOT unique here: deduplicated in staging
-
+            data_tests: [not_null]   # NOT unique at source - deduplicated in staging

@@ -14,3 +14,75 @@ models:
                 values: ["NA", "EMEA", "APAC", "LATAM"]
       - name: signed_up_at
         data_tests: [not_null]
+
+  - name: stg_platform__plan_changes
+    description: Plan change log, one row per change event.
+    columns:
+      - name: plan_change_id
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_platform__customers')
+                field: customer_id
+      - name: plan_name
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('plans')
+                field: plan_name
+
+  - name: stg_platform__video_assets
+    description: Video assets, one row per asset.
+    columns:
+      - name: asset_id
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_platform__customers')
+                field: customer_id
+      - name: asset_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["ready", "errored"]
+      - name: duration_seconds
+        data_tests: [is_non_negative]
+
+  - name: stg_player__video_views
+    description: Playback sessions, deduplicated to one row per view_id (latest load wins).
+    columns:
+      - name: view_id
+        description: Primary key (after deduplication).
+        data_tests: [unique, not_null]
+      - name: asset_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_platform__video_assets')
+                field: asset_id
+      - name: watch_time_ms
+        data_tests: [not_null, is_non_negative]
+      - name: startup_time_ms
+        description: Null when playback failed before the first frame.
+        data_tests:
+          - value_between:
+              arguments:
+                min_value: 0
+                max_value: 60000
+      - name: rebuffer_duration_ms
+        data_tests: [is_non_negative]
+      - name: device_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["desktop", "mobile", "tablet", "tv", "unknown"]
+      - name: country_code
+        description: ISO 3166-1 alpha-2, upper-cased in staging.
+        data_tests: [not_null, is_two_letter_upper_code]
