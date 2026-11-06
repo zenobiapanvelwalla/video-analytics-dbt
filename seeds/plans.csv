@@ -1,0 +1,5 @@
+plan_name,plan_rank,monthly_base_fee_usd,included_delivery_minutes,overage_usd_per_1k_minutes
+starter,1,10.00,50,4.00
+growth,2,100.00,500,3.00
+scale,3,500.00,5000,2.00
+enterprise,4,2000.00,50000,1.50

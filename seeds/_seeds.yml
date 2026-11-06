@@ -1,0 +1,20 @@
+version: 2
+
+seeds:
+  - name: plans
+    description: >
+      Pricing for each plan. Static reference data owned by Finance, so it's
+      version-controlled as a seed. Each plan includes delivered minutes per
+      month; usage above that is billed per 1,000 minutes.
+    config:
+      column_types:
+        plan_name: varchar
+        plan_rank: integer
+        monthly_base_fee_usd: decimal(18,2)
+        included_delivery_minutes: bigint
+        overage_usd_per_1k_minutes: decimal(18,2)
+    columns:
+      - name: plan_name
+        data_tests: [unique, not_null]
+      - name: plan_rank
+        data_tests: [unique, not_null]
