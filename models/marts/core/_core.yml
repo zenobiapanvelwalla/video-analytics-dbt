@@ -61,3 +61,38 @@ models:
               arguments:
                 to: ref('dim_customers')
                 field: customer_id
+                
+  - name: fct_video_views
+    description: >
+      One row per playback session. Core fact table for quality-of-experience
+      analysis: startup time, rebuffering, playback failures. Built incrementally
+      with a lookback window for late-arriving events.
+    columns:
+      - name: view_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
+      - name: asset_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_video_assets')
+                field: asset_id
+      - name: watch_time_ms
+        description: Time spent playing content, excluding startup and stalls.
+        data_tests: [is_non_negative]
+      - name: rebuffer_ratio
+        description: rebuffer_duration / (watch_time + rebuffer_duration). Null when nothing was watched.
+        data_tests:
+          - value_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: loaded_at
+        description: When the event landed in the warehouse. Drives incremental processing.

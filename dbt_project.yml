@@ -20,3 +20,7 @@ models:
     marts:
       +schema: marts
       +materialized: table
+
+vars:
+  # Days to re-process on each incremental run, to catch late-arriving events.
+  incremental_lookback_days: 3
