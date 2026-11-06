@@ -1,0 +1,1 @@
+Planted incident: cdn_b, Wed Oct 14, 2026, 02:00 to 08:00 UTC (failure rate ~25–40% vs ~1.5% baseline)

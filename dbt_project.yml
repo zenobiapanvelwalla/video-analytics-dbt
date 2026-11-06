@@ -1,0 +1,19 @@
+name: framewise_analytics
+version: '1.0.0'
+config-version: 2
+
+profile: framewise_analytics #  must match the name in profiles.yml
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+analysis-paths: ["analysis"]
+
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  framewise_analytics:
+    staging:
+      +schema: staging
+      +materialized: view

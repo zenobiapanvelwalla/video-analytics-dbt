@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: stg_platform__customers
+    description: Customer accounts, one row per customer. Cast and lightly cleaned.
+    columns:
+      - name: customer_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: region
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["NA", "EMEA", "APAC", "LATAM"]
+      - name: signed_up_at
+        data_tests: [not_null]

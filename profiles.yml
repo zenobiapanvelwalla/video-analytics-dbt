@@ -1,0 +1,7 @@
+framewise_analytics:
+  target: duckdb
+  outputs:
+    duckdb:
+      type: duckdb
+      path: framewise.duckdb
+      threads: 4
