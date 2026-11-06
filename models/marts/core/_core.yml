@@ -1,0 +1,63 @@
+version: 2
+
+models:
+  - name: dim_customer_plan_history
+    description: >
+      SCD Type 2 history of each customer's plan. One row per customer per plan
+      period. valid_to is exclusive and null for the current plan. Use for
+      point-in-time questions ("what plan was this customer on when X happened?").
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ["customer_id", "valid_from"]
+      - no_overlapping_ranges:
+          arguments:
+            partition_by: customer_id
+            lower_bound: valid_from
+            upper_bound: valid_to
+    columns:
+      - name: customer_plan_key
+        description: Surrogate key (customer_id + plan_sequence).
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
+      - name: change_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["new", "upgrade", "downgrade", "no_change"]
+      - name: valid_from
+        description: Start of the plan period (inclusive).
+        data_tests: [not_null]
+      - name: valid_to
+        description: End of the plan period (exclusive). Null for the current plan.
+
+  - name: dim_customers
+    description: One row per customer, with current plan and lifetime plan-change counts.
+    columns:
+      - name: customer_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: current_plan_name
+        description: Every customer must have exactly one current plan.
+        data_tests: [not_null]
+      - name: plan_change_count
+        data_tests: [is_non_negative]
+
+  - name: dim_video_assets
+    description: One row per video asset.
+    columns:
+      - name: asset_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
