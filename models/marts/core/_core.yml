@@ -18,50 +18,111 @@ models:
     columns:
       - name: customer_plan_key
         description: Surrogate key (customer_id + plan_sequence).
-        data_tests: [unique, not_null]
+        data_type: varchar
+        constraints: [{ type: not_null }]
+        data_tests: [unique]
       - name: customer_id
+        data_type: varchar
+        constraints: [{ type: not_null }]
         data_tests:
-          - not_null
           - relationships:
               arguments:
                 to: ref('dim_customers')
                 field: customer_id
+      - name: plan_sequence
+        description: 1 for the customer's first plan, 2 for the next, and so on.
+        data_type: integer
+      - name: plan_name
+        data_type: varchar
+        constraints: [{ type: not_null }]
+      - name: previous_plan_name
+        data_type: varchar
       - name: change_type
+        data_type: varchar
         data_tests:
           - accepted_values:
               arguments:
                 values: ["new", "upgrade", "downgrade", "no_change"]
+      - name: monthly_base_fee_usd
+        data_type: decimal(18,2)
+      - name: included_delivery_minutes
+        data_type: bigint
+      - name: overage_usd_per_1k_minutes
+        data_type: decimal(18,2)
       - name: valid_from
         description: Start of the plan period (inclusive).
-        data_tests: [not_null]
+        data_type: timestamp
+        constraints: [{ type: not_null }]
       - name: valid_to
         description: End of the plan period (exclusive). Null for the current plan.
+        data_type: timestamp
+      - name: is_current
+        data_type: boolean
 
   - name: dim_customers
     description: One row per customer, with current plan and lifetime plan-change counts.
     columns:
       - name: customer_id
         description: Primary key.
-        data_tests: [unique, not_null]
+        data_type: varchar
+        constraints: [{ type: not_null }]
+        data_tests: [unique]
+      - name: company_name
+        data_type: varchar
+      - name: industry
+        data_type: varchar
+      - name: region
+        data_type: varchar
+      - name: signed_up_at
+        data_type: timestamp
       - name: current_plan_name
         description: Every customer must have exactly one current plan.
+        data_type: varchar
         data_tests: [not_null]
+      - name: current_plan_started_at
+        data_type: timestamp
+      - name: initial_plan_name
+        data_type: varchar
       - name: plan_change_count
+        data_type: integer
         data_tests: [is_non_negative]
+      - name: upgrade_count
+        data_type: integer
+      - name: downgrade_count
+        data_type: integer
+      - name: asset_count
+        data_type: integer
+      - name: first_asset_created_at
+        data_type: timestamp
 
   - name: dim_video_assets
     description: One row per video asset.
     columns:
       - name: asset_id
         description: Primary key.
-        data_tests: [unique, not_null]
+        data_type: varchar
+        constraints: [{ type: not_null }]
+        data_tests: [unique]
       - name: customer_id
+        data_type: varchar
         data_tests:
           - relationships:
               arguments:
                 to: ref('dim_customers')
                 field: customer_id
-                
+      - name: asset_status
+        data_type: varchar
+      - name: duration_seconds
+        data_type: integer
+      - name: max_resolution
+        data_type: varchar
+      - name: created_at
+        data_type: timestamp
+      - name: deleted_at
+        data_type: timestamp
+      - name: is_deleted
+        data_type: boolean
+
   - name: fct_video_views
     description: >
       One row per playback session. Core fact table for quality-of-experience
@@ -70,29 +131,90 @@ models:
     columns:
       - name: view_id
         description: Primary key.
-        data_tests: [unique, not_null]
+        data_type: varchar
+        constraints: [{ type: not_null }]
+        data_tests: [unique]
       - name: customer_id
+        data_type: varchar
+        constraints: [{ type: not_null }]
         data_tests:
-          - not_null
           - relationships:
               arguments:
                 to: ref('dim_customers')
                 field: customer_id
       - name: asset_id
+        data_type: varchar
         data_tests:
           - relationships:
               arguments:
                 to: ref('dim_video_assets')
                 field: asset_id
+      - name: viewer_id
+        data_type: varchar
+      - name: view_started_at
+        data_type: timestamp
+      - name: view_ended_at
+        data_type: timestamp
+      - name: view_date
+        description: Date the view started (UTC). Clustering key in Snowflake.
+        data_type: date
       - name: watch_time_ms
         description: Time spent playing content, excluding startup and stalls.
+        data_type: bigint
         data_tests: [is_non_negative]
+      - name: startup_time_ms
+        description: Time from play request to first frame. Null for failed playbacks.
+        data_type: bigint
+      - name: rebuffer_count
+        data_type: integer
+      - name: rebuffer_duration_ms
+        data_type: bigint
       - name: rebuffer_ratio
         description: rebuffer_duration / (watch_time + rebuffer_duration). Null when nothing was watched.
+        data_type: double
         data_tests:
           - value_between:
               arguments:
                 min_value: 0
                 max_value: 1
+      - name: had_rebuffering
+        data_type: boolean
+      - name: is_playback_failed
+        description: True when the session ended in a fatal playback error.
+        data_type: boolean
+      - name: error_code
+        data_type: varchar
+      - name: device_type
+        data_type: varchar
+      - name: browser
+        data_type: varchar
+      - name: country_code
+        data_type: varchar
+      - name: cdn
+        data_type: varchar
       - name: loaded_at
         description: When the event landed in the warehouse. Drives incremental processing.
+        data_type: timestamp
+
+unit_tests:
+  - name: test_scd2_ranges_and_change_types
+    description: >
+      Plan periods chain together (valid_to = next valid_from), only the last
+      period is current, and upgrades / downgrades are classified by plan rank.
+    model: dim_customer_plan_history
+    given:
+      - input: ref('stg_platform__plan_changes')
+        rows:
+          - { plan_change_id: pc_1, customer_id: c1, plan_name: starter, changed_at: "2026-01-01 00:00:00" }
+          - { plan_change_id: pc_2, customer_id: c1, plan_name: scale,   changed_at: "2026-03-15 12:00:00" }
+          - { plan_change_id: pc_3, customer_id: c1, plan_name: growth,  changed_at: "2026-06-01 00:00:00" }
+      - input: ref('plans')
+        rows:
+          - { plan_name: starter, plan_rank: 1, monthly_base_fee_usd: 20,   included_delivery_minutes: 1000,  overage_usd_per_1k_minutes: 1.0 }
+          - { plan_name: growth,  plan_rank: 2, monthly_base_fee_usd: 250,  included_delivery_minutes: 10000, overage_usd_per_1k_minutes: 0.8 }
+          - { plan_name: scale,   plan_rank: 3, monthly_base_fee_usd: 1000, included_delivery_minutes: 50000, overage_usd_per_1k_minutes: 0.6 }
+    expect:
+      rows:
+        - { plan_sequence: 1, plan_name: starter, change_type: new,       valid_from: "2026-01-01 00:00:00", valid_to: "2026-03-15 12:00:00", is_current: false }
+        - { plan_sequence: 2, plan_name: scale,   change_type: upgrade,   valid_from: "2026-03-15 12:00:00", valid_to: "2026-06-01 00:00:00", is_current: false }
+        - { plan_sequence: 3, plan_name: growth,  change_type: downgrade, valid_from: "2026-06-01 00:00:00", valid_to: null,                  is_current: true }

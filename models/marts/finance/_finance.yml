@@ -12,13 +12,34 @@ models:
             combination_of_columns: ["customer_id", "usage_date"]
     columns:
       - name: customer_usage_day_key
-        data_tests: [unique, not_null]
+        description: Surrogate key (customer_id + usage_date).
+        data_type: varchar
+        constraints: [{ type: not_null }]
+        data_tests: [unique]
+      - name: customer_id
+        data_type: varchar
+        constraints: [{ type: not_null }]
+      - name: usage_date
+        data_type: date
+        constraints: [{ type: not_null }]
       - name: plan_name
         description: Null here would mean a usage day with no matching plan period.
+        data_type: varchar
         data_tests: [not_null]
+      - name: view_count
+        data_type: bigint
+      - name: unique_viewer_count
+        data_type: bigint
+      - name: failed_view_count
+        data_type: bigint
+      - name: watch_time_ms
+        data_type: bigint
       - name: delivered_minutes
         description: Total watch time in minutes. The billable usage unit.
+        data_type: decimal(18,2)
         data_tests: [is_non_negative]
+      - name: rebuffer_duration_ms
+        data_type: bigint
 
   - name: fct_monthly_billing
     description: >
@@ -31,12 +52,71 @@ models:
             combination_of_columns: ["customer_id", "billing_month"]
     columns:
       - name: customer_month_key
-        data_tests: [unique, not_null]
+        description: Surrogate key (customer_id + billing_month).
+        data_type: varchar
+        constraints: [{ type: not_null }]
+        data_tests: [unique]
+      - name: customer_id
+        data_type: varchar
+        constraints: [{ type: not_null }]
+      - name: billing_month
+        description: First day of the billing month.
+        data_type: date
+        constraints: [{ type: not_null }]
       - name: plan_name
-        data_tests: [not_null]
+        description: Plan in effect at the end of the month.
+        data_type: varchar
+        constraints: [{ type: not_null }]
+      - name: view_count
+        data_type: bigint
+      - name: delivered_minutes
+        data_type: decimal(18,2)
+      - name: included_delivery_minutes
+        data_type: bigint
       - name: overage_minutes
+        data_type: decimal(18,2)
         data_tests: [is_non_negative]
+      - name: base_fee_usd
+        data_type: decimal(18,2)
       - name: overage_fee_usd
+        data_type: decimal(18,2)
         data_tests: [is_non_negative]
+      - name: total_billed_usd
+        data_type: decimal(18,2)
       - name: is_complete_month
-        description: True when the month has closed and is fully covered by the usage data.
+        description: >
+          True when the month has closed and is fully covered by the usage data.
+          The current month and the first (partial) month of data are false.
+        data_type: boolean
+
+unit_tests:
+  - name: test_billing_overage_math
+    description: >
+      Usage under the included minutes pays only the base fee; usage over it is
+      billed per 1,000 minutes; a month with no usage still pays the base fee.
+    model: fct_monthly_billing
+    given:
+      - input: ref('fct_daily_customer_usage')
+        rows:
+          - { customer_id: c1, usage_date: "2025-01-01", view_count: 10, delivered_minutes: 800.00 }
+          - { customer_id: c1, usage_date: "2025-03-10", view_count: 50, delivered_minutes: 3500.00 }
+      - input: ref('dim_customers')
+        rows:
+          - { customer_id: c1, signed_up_at: "2024-12-15 00:00:00" }
+      - input: ref('dim_customer_plan_history')
+        rows:
+          - { customer_id: c1, plan_name: starter, monthly_base_fee_usd: 20.00, included_delivery_minutes: 1000, overage_usd_per_1k_minutes: 1.00, valid_from: "2024-12-15 00:00:00", valid_to: null }
+      - input: ref('metricflow_time_spine')
+        format: sql
+        rows: |
+          select cast('2025-01-01' as date) as date_day union all
+          select cast('2025-02-01' as date) union all
+          select cast('2025-03-01' as date)
+    expect:
+      rows:
+        # Jan: 800 of 1,000 included minutes -> base fee only
+        - { billing_month: "2025-01-01", overage_minutes: 0,    overage_fee_usd: 0.00, total_billed_usd: 20.00, is_complete_month: true }
+        # Feb: no usage at all -> still pays the base fee
+        - { billing_month: "2025-02-01", overage_minutes: 0,    overage_fee_usd: 0.00, total_billed_usd: 20.00, is_complete_month: true }
+        # Mar: 3,500 - 1,000 = 2,500 over -> 2.5 x $1.00
+        - { billing_month: "2025-03-01", overage_minutes: 2500, overage_fee_usd: 2.50, total_billed_usd: 22.50, is_complete_month: true }

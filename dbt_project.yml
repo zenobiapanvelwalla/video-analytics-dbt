@@ -20,6 +20,8 @@ models:
     marts:
       +schema: marts
       +materialized: table
+      +contract:
+        enforced: true
     utilities:
       +schema: marts
       +materialized: table
