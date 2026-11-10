@@ -1,0 +1,239 @@
+version: 2
+
+# Semantic layer (MetricFlow). Metrics are defined ONCE here, so BI tools and
+# AI agents asking "what was our rebuffer rate on mobile last week?" all get
+# the same answer from the same definition, instead of each writing their own SQL.
+
+semantic_models:
+  - name: video_views
+    description: Playback sessions and their quality-of-experience measures.
+    model: ref('fct_video_views')
+    defaults:
+      agg_time_dimension: view_date
+    entities:
+      - name: view
+        type: primary
+        expr: view_id
+      - name: customer
+        type: foreign
+        expr: customer_id
+      - name: asset
+        type: foreign
+        expr: asset_id
+    dimensions:
+      - name: view_date
+        type: time
+        type_params:
+          time_granularity: day
+      - name: device_type
+        type: categorical
+      - name: browser
+        type: categorical
+      - name: country_code
+        type: categorical
+      - name: cdn
+        type: categorical
+      - name: error_code
+        type: categorical
+      - name: is_playback_failed
+        type: categorical
+    measures:
+      - name: views
+        description: Number of playback sessions.
+        agg: count
+        expr: view_id
+      - name: failed_views
+        agg: sum
+        expr: "case when is_playback_failed then 1 else 0 end"
+      - name: views_with_rebuffering
+        agg: sum
+        expr: "case when had_rebuffering then 1 else 0 end"
+      - name: unique_viewers
+        agg: count_distinct
+        expr: viewer_id
+      - name: watch_time_ms
+        agg: sum
+      - name: rebuffer_duration_ms
+        agg: sum
+      - name: startup_time_ms_p50
+        description: Median startup time across successful playbacks.
+        agg: median
+        expr: startup_time_ms
+      - name: startup_time_ms_p95
+        agg: percentile
+        expr: startup_time_ms
+        agg_params:
+          percentile: 0.95
+          use_discrete_percentile: false
+
+  - name: customers
+    description: Customer accounts and their current plan.
+    model: ref('dim_customers')
+    entities:
+      - name: customer
+        type: primary
+        expr: customer_id
+    dimensions:
+      - name: current_plan_name
+        type: categorical
+      - name: industry
+        type: categorical
+      - name: region
+        type: categorical
+
+  - name: monthly_billing
+    description: Customer x month billing.
+    model: ref('fct_monthly_billing')
+    defaults:
+      agg_time_dimension: billing_month
+    entities:
+      - name: customer_month
+        type: primary
+        expr: customer_month_key
+      - name: customer
+        type: foreign
+        expr: customer_id
+    dimensions:
+      - name: billing_month
+        type: time
+        type_params:
+          time_granularity: month
+      - name: plan_name
+        type: categorical
+      - name: is_complete_month
+        type: categorical
+    measures:
+      - name: total_billed_usd
+        agg: sum
+      - name: base_fee_usd
+        agg: sum
+      - name: overage_fee_usd
+        agg: sum
+      - name: delivered_minutes
+        agg: sum
+      - name: billed_customers
+        agg: count_distinct
+        expr: customer_id
+
+metrics:
+  # ------------------------------------------------------------ playback / QoE
+  - name: total_views
+    label: Views
+    description: Number of playback sessions.
+    type: simple
+    type_params:
+      measure: views
+
+  - name: failed_view_count
+    label: Failed views
+    type: simple
+    type_params:
+      measure: failed_views
+
+  - name: rebuffered_view_count
+    label: Views with rebuffering
+    type: simple
+    type_params:
+      measure: views_with_rebuffering
+
+  - name: unique_viewer_count
+    label: Unique viewers
+    type: simple
+    type_params:
+      measure: unique_viewers
+
+  - name: total_watch_time_ms
+    label: Watch time (ms)
+    type: simple
+    type_params:
+      measure: watch_time_ms
+
+  - name: total_rebuffer_duration_ms
+    label: Rebuffer duration (ms)
+    type: simple
+    type_params:
+      measure: rebuffer_duration_ms
+
+  - name: playback_failure_rate
+    label: Playback failure rate
+    description: Share of sessions that ended in a fatal playback error.
+    type: ratio
+    type_params:
+      numerator: failed_view_count
+      denominator: total_views
+
+  - name: rebuffer_frequency
+    label: Share of views with rebuffering
+    type: ratio
+    type_params:
+      numerator: rebuffered_view_count
+      denominator: total_views
+
+  - name: rebuffer_percentage
+    label: Rebuffer percentage
+    description: >
+      Share of total viewing time spent stalled:
+      rebuffer duration / (watch time + rebuffer duration).
+    type: derived
+    type_params:
+      expr: rebuffer_ms / (watch_ms + rebuffer_ms)
+      metrics:
+        - name: total_rebuffer_duration_ms
+          alias: rebuffer_ms
+        - name: total_watch_time_ms
+          alias: watch_ms
+
+  - name: watch_hours
+    label: Watch hours
+    type: derived
+    type_params:
+      expr: watch_ms / 3600000
+      metrics:
+        - name: total_watch_time_ms
+          alias: watch_ms
+
+  - name: median_startup_time_ms
+    label: Median startup time (ms)
+    type: simple
+    type_params:
+      measure: startup_time_ms_p50
+
+  - name: p95_startup_time_ms
+    label: P95 startup time (ms)
+    type: simple
+    type_params:
+      measure: startup_time_ms_p95
+
+  # ------------------------------------------------------------------ revenue
+  - name: revenue
+    label: Revenue (USD)
+    description: Total billed (base + overage). Filter is_complete_month for closed months.
+    type: simple
+    type_params:
+      measure: total_billed_usd
+
+  - name: overage_revenue
+    label: Overage revenue (USD)
+    type: simple
+    type_params:
+      measure: overage_fee_usd
+
+  - name: billed_customer_count
+    label: Billed customers
+    type: simple
+    type_params:
+      measure: billed_customers
+
+  - name: overage_share_of_revenue
+    label: Overage share of revenue
+    type: ratio
+    type_params:
+      numerator: overage_revenue
+      denominator: revenue
+
+  - name: revenue_per_customer
+    label: Average revenue per customer (USD)
+    type: ratio
+    type_params:
+      numerator: revenue
+      denominator: billed_customer_count

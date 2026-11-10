@@ -3,6 +3,9 @@ version: 2
 models:
   - name: metricflow_time_spine
     description: One row per calendar day, 2023-01-01 through 2029-12-31.
+    time_spine:
+      standard_granularity_column: date_day
     columns:
       - name: date_day
+        granularity: day
         data_tests: [unique, not_null]
