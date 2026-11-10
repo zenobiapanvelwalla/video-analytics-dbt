@@ -1,0 +1,61 @@
+name: dbt CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# If you push twice quickly, cancel the older run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test (DuckDB)
+    runs-on: ubuntu-latest
+    env:
+      DBT_PROFILES_DIR: .
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate and load raw data
+        run: |
+          python scripts/generate_data.py --views 50000 --out data
+          python scripts/load_raw.py --target duckdb
+
+      - name: Check source freshness
+        run: dbt source freshness
+
+      - name: Build models and run all tests (incl. unit tests)
+        run: dbt build --fail-fast
+
+      - name: Re-run incremental model to verify the incremental path
+        run: dbt build --select fct_video_views+
+
+      - name: Validate semantic layer against the warehouse
+        run: mf validate-configs
+
+      - name: Generate docs
+        run: dbt docs generate
+
+      - name: Upload dbt artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-artifacts
+          path: |
+            target/manifest.json
+            target/run_results.json
+            target/catalog.json
