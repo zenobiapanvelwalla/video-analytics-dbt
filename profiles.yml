@@ -1,7 +1,33 @@
 framewise_analytics:
   target: duckdb
   outputs:
+
+    # Local development and CI. Zero setup, zero cost.
     duckdb:
       type: duckdb
       path: framewise.duckdb
       threads: 4
+
+    # Personal dev schemas in Snowflake: ANALYTICS.DBT_ZENOBIA_*
+    snowflake_dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', '') }}"
+      user: "{{ env_var('SNOWFLAKE_USER', '') }}"
+      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH', '') }}"
+      role: transformer
+      warehouse: transforming_wh
+      database: analytics
+      schema: "{{ env_var('DBT_DEV_SCHEMA', 'dbt_dev') }}"
+      threads: 8
+
+    # Production: clean schema names (ANALYTICS.STAGING, ANALYTICS.MARTS, ...)
+    snowflake_prod:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', '') }}"
+      user: "{{ env_var('SNOWFLAKE_USER', '') }}"
+      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH', '') }}"
+      role: transformer
+      warehouse: transforming_wh
+      database: analytics
+      schema: prod
+      threads: 8
