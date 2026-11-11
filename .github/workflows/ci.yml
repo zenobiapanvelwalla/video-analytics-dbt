@@ -59,3 +59,27 @@ jobs:
             target/manifest.json
             target/run_results.json
             target/catalog.json
+
+# ---------------------------------------------------------------------------
+  # Snowflake Slim CI (enable by adding the SNOWFLAKE_* repository secrets).
+  # Builds only modified models and their children into a throwaway PR schema,
+  # deferring unchanged upstream models to production.
+  # ---------------------------------------------------------------------------
+  # snowflake-slim-ci:
+  #   if: github.event_name == 'pull_request'
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     DBT_PROFILES_DIR: .
+  #     DBT_TARGET: snowflake_dev
+  #     SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+  #     SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+  #     SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with: { python-version: "3.12", cache: pip }
+  #     - run: pip install -r requirements-snowflake.txt
+  #     - name: Download production manifest
+  #       run: echo "fetch prod manifest.json into ./prod-artifacts (e.g. from S3 or a prior run)"
+  #     - name: Build modified models only
+  #       run: dbt build --select state:modified+ --defer --state ./prod-artifacts

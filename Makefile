@@ -10,7 +10,7 @@ data:             ## Generate synthetic raw data and load it into DuckDB
 	python scripts/load_raw.py --target duckdb
 
 build:            ## Build and test every model (seeds, models, tests, unit tests)
-	dbt build
+	dbt build --full-refresh
 
 freshness:        ## Check source freshness
 	dbt source freshness
@@ -40,6 +40,9 @@ metrics:          ## Validate the semantic layer and run a sample metric query
          --where "{{ Dimension('customer_month__is_complete_month') }}"
 # 	See the SQL MetricFlow writes. Add --explain to any query
 	mf query --metrics playback_failure_rate --group-by customer__current_plan_name --explain
+
+incident:         ## Show the planted CDN incident in raw data
+	python scripts/find_cdn_incident.py
 
 clean:
 	dbt clean && rm -rf data logs *.duckdb

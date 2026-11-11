@@ -9,7 +9,10 @@
 #}
 
 with source as (
-    select * from {{ source('player', 'video_views')}}
+
+    select * from {{ source('player', 'video_views') }}
+    where true {{ limit_data_in_dev('cast(view_started_at as timestamp)') }}
+
 ),
 deduplicated as (
 

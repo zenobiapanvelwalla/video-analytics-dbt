@@ -14,6 +14,9 @@ clean-targets: ["target", "dbt_packages"]
 
 models:
   framewise_analytics:
+    +persist_docs:
+      relation: true
+      columns: true
     staging:
       +schema: staging
       +materialized: view
@@ -22,6 +25,9 @@ models:
       +materialized: table
       +contract:
         enforced: true
+      # Applied on Snowflake; DuckDB ignores grants (logs a notice)
+      +grants:
+        select: ["reporter"]
     utilities:
       +schema: marts
       +materialized: table
@@ -29,3 +35,4 @@ models:
 vars:
   # Days to re-process on each incremental run, to catch late-arriving events.
   incremental_lookback_days: 3
+  dev_lookback_days: 30

@@ -56,8 +56,7 @@ def load_snowflake(data_dir: Path) -> None:
     con = snowflake.connector.connect(
         account=os.environ["SNOWFLAKE_ACCOUNT"],
         user=os.environ["SNOWFLAKE_USER"],
-        password=os.environ.get("SNOWFLAKE_PASSWORD"),
-        authenticator=os.environ.get("SNOWFLAKE_AUTHENTICATOR", "snowflake"),
+        private_key_file=os.environ["SNOWFLAKE_PRIVATE_KEY_PATH"],
         role=os.environ.get("SNOWFLAKE_LOADER_ROLE", "LOADER"),
         warehouse=os.environ.get("SNOWFLAKE_LOADER_WAREHOUSE", "LOADING_WH"),
         database="RAW",
